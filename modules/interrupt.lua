@@ -259,25 +259,41 @@ local function RefreshStatsFrame()
             row.countText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.countText:SetPoint("RIGHT", -4, 0)
 
-            -- 添加闪烁光圈
-            row.flash = row:CreateTexture(nil, "OVERLAY")
-            row.flash:SetAllPoints()
-            row.flash:SetColorTexture(1, 1, 0, 0) -- 黄色，初始透明
+            -- 添加闪烁光圈（确保在统计面板的row框架内）
+            row.flash = row:CreateTexture(nil, "ARTWORK")
+            row.flash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+            row.flash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+            row.flash:SetColorTexture(1, 0.8, 0, 0) -- 亮黄色，初始透明
             row.flash:SetBlendMode("ADD")
+            row.flash:SetDrawLayer("ARTWORK", 7)
 
-            -- 创建动画组
+            -- 创建动画组（更明显的闪烁效果）
             row.flashAnim = row.flash:CreateAnimationGroup()
             local fadeIn = row.flashAnim:CreateAnimation("Alpha")
             fadeIn:SetFromAlpha(0)
-            fadeIn:SetToAlpha(0.6)
-            fadeIn:SetDuration(0.15)
+            fadeIn:SetToAlpha(0.8)
+            fadeIn:SetDuration(0.1)
             fadeIn:SetOrder(1)
 
             local fadeOut = row.flashAnim:CreateAnimation("Alpha")
-            fadeOut:SetFromAlpha(0.6)
+            fadeOut:SetFromAlpha(0.8)
             fadeOut:SetToAlpha(0)
-            fadeOut:SetDuration(0.35)
+            fadeOut:SetDuration(0.4)
             fadeOut:SetOrder(2)
+
+            -- 添加第二次闪烁
+            local fadeIn2 = row.flashAnim:CreateAnimation("Alpha")
+            fadeIn2:SetFromAlpha(0)
+            fadeIn2:SetToAlpha(0.6)
+            fadeIn2:SetDuration(0.1)
+            fadeIn2:SetOrder(3)
+            fadeIn2:SetStartDelay(0.05)
+
+            local fadeOut2 = row.flashAnim:CreateAnimation("Alpha")
+            fadeOut2:SetFromAlpha(0.6)
+            fadeOut2:SetToAlpha(0)
+            fadeOut2:SetDuration(0.3)
+            fadeOut2:SetOrder(4)
 
             statsFrame.rows[i] = row
         end
