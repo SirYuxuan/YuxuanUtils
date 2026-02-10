@@ -1,0 +1,15 @@
+## Interface: 120000
+## Title: 雨轩工具箱
+## Notes: 一些常用的工具
+## Author: Yuxuan
+## Version: 0.0.4
+## SavedVariables: YuxuanUtilsDB
+
+# 核心文件
+main.lua
+
+# 功能模块
+modules\navigation.lua
+modules\interrupt.lua
+modules\toolbox.lua
+modules\options.lua
