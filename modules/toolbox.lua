@@ -30,7 +30,7 @@ local function CreateToolboxFrame()
 
     -- ============ 选项卡系统 ============
     local tabs = {}
-    local tabNames = { "组队", "打断", "预留1", "预留2" }
+    local tabNames = { "打断", "组队", "预留1", "预留2" }
     local activeTab = 1
 
     local function ShowPage(index)
@@ -95,7 +95,7 @@ local function CreateToolboxFrame()
 
     -- ============ 页面1：组队邀请 ============
     local page1 = CreatePage()
-    toolboxPages[1] = page1
+    toolboxPages[2] = page1
 
     local invSep = page1:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     invSep:SetPoint("TOPLEFT", 4, -8)
@@ -143,7 +143,7 @@ local function CreateToolboxFrame()
 
     -- ============ 页面2：打断工具 ============
     local page2 = CreatePage()
-    toolboxPages[2] = page2
+    toolboxPages[1] = page2
 
     local intSep = page2:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     intSep:SetPoint("TOPLEFT", 4, -8)
@@ -179,10 +179,21 @@ local function CreateToolboxFrame()
     statsBtn:SetText("显示/隐藏统计窗口")
     statsBtn:SetScript("OnClick", function()
         local status = addon.Interrupt.GetStatus()
-        if status.tracking then
-            addon.Interrupt.ShowStats()
-        else
+        if not status.tracking then
             addon.Msg("|cff888888不在副本中，无法显示统计窗口|r")
+            return
+        end
+
+        -- 切换显示/隐藏
+        if addon.Interrupt and addon.Interrupt.GetStatus then
+            -- 如果窗口已显示则隐藏，否则显示
+            if YuxuanInterruptStats and YuxuanInterruptStats:IsShown() then
+                addon.Interrupt.HideStats()
+            else
+                addon.Interrupt.ShowStats()
+            end
+        else
+            addon.Interrupt.ShowStats()
         end
     end)
 

@@ -1,15 +1,11 @@
 ------------------------------------------------------------
--- 打断模块 V2：精简版
+-- 打断模块 V3：使用 CLEU SPELL_INTERRUPT
 --
 -- WoW 12.0 适配：
---   - 不使用 CLEU（会导致 taint）
---   - 敌方 NPC 名和技能名在 12.0 中为 secret value，无法可靠获取
---   - 只关注 "谁用什么技能打断了"，不再显示敌方信息
---   - 所有表操作用 pcall 保护
---
--- 事件流程：
---   UNIT_SPELLCAST_SUCCEEDED(友方) → 记录打断技能释放
---   UNIT_SPELLCAST_INTERRUPTED(敌方) → 配对 → 输出
+--   - 使用 COMBAT_LOG_EVENT_UNFILTERED + SPELL_INTERRUPT 子事件
+--     直接获取打断者、打断技能，无需配对，准确可靠
+--   - 敌方 NPC 名和技能名可能为 secret value，不显示敌方信息
+--   - 只关注 "谁用什么技能打断了"
 ------------------------------------------------------------
 ---@diagnostic disable: undefined-global, redundant-return-value
 local addonName, addon = ...
@@ -113,12 +109,6 @@ end
 ------------------------------------------------------------
 local interruptFrame = CreateFrame("Frame")
 local interruptEnabled = false
-
--- 最近的友方打断技能释放: [guid] = { name, spellName, time }
-local recentCasts = {}
-
--- 去重: [destGUID] = time
-local recentOutputs = {}
 
 ------------------------------------------------------------
 -- Unit 判断
@@ -466,110 +456,74 @@ groupFrame:SetScript("OnEvent", function()
 end)
 
 ------------------------------------------------------------
--- 打断事件（精简版：只用两个事件）
+-- 打断事件（V3：使用 CLEU SPELL_INTERRUPT）
 ------------------------------------------------------------
 local function EnableInterruptAlert()
     if interruptEnabled then return end
     interruptEnabled = true
-    interruptFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-    interruptFrame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+    interruptFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 end
 
 local function DisableInterruptAlert()
     if not interruptEnabled then return end
     interruptEnabled = false
-    interruptFrame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-    interruptFrame:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
-    wipe(recentCasts)
-    wipe(recentOutputs)
+    interruptFrame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 end
 
-interruptFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
+-- 去重: [sourceGUID..destGUID] = time
+local recentOutputs = {}
+
+interruptFrame:SetScript("OnEvent", function(self, event)
     if not interruptEnabled then return end
 
-    -- ========================================
-    -- 友方释放了打断技能
-    -- ========================================
-    if event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if not IsGroupUnit(unit) then return end
-        if not spellID or type(spellID) ~= "number" or issecretvalue(spellID) then return end
+    local timestamp, subEvent, hideCaster,
+    sourceGUID, sourceName, sourceFlags, sourceRaidFlags,
+    destGUID, destName, destFlags, destRaidFlags,
+    extraSpellID, extraSpellName, extraSchool,
+    interruptedSpellID, interruptedSpellName = CombatLogGetCurrentEventInfo()
 
-        -- 查本地打断技能表（绝对安全，不查远程 API）
-        local spellName = SafeGet(INTERRUPT_SPELLS, spellID)
-        if not spellName then return end
+    if subEvent ~= "SPELL_INTERRUPT" then return end
 
-        local guid = SafeStr(UnitGUID(unit))
-        local name = SafeStr(UnitName(unit))
-        if not guid or not name then return end
-
-        SafeSet(recentCasts, guid, {
-            name = name,
-            spellName = spellName,
-            time = GetTime(),
-        })
+    -- 只统计队伍/团队成员的打断（包括自己）
+    if not sourceGUID or not sourceName then return end
+    if bit.band(sourceFlags, COMBATLOG_OBJECT_AFFILIATION_MINE + COMBATLOG_OBJECT_AFFILIATION_PARTY + COMBATLOG_OBJECT_AFFILIATION_RAID) == 0 then
         return
     end
 
-    -- ========================================
-    -- 敌方施法被打断
-    -- ========================================
-    if event == "UNIT_SPELLCAST_INTERRUPTED" then
-        if not IsEnemyUnit(unit) then return end
+    -- 去重（同一个人对同一目标 0.5 秒内不重复）
+    local now = GetTime()
+    local dedupeKey = (sourceGUID or "") .. (destGUID or "")
+    local last = recentOutputs[dedupeKey]
+    if last and (now - last) < 0.5 then return end
+    recentOutputs[dedupeKey] = now
 
-        -- 去重
-        local destGUID = SafeStr(UnitGUID(unit))
-        if destGUID then
-            local now = GetTime()
-            local last = SafeGet(recentOutputs, destGUID)
-            if last and (now - last) < 0.5 then return end
-            SafeSet(recentOutputs, destGUID, now)
-        end
-
-        -- 配对打断者：找最近的友方打断技能释放
-        local now = GetTime()
-        local bestGUID, bestInfo, bestDiff = nil, nil, 999
-
-        local keys = {}
-        pcall(function()
-            for g in pairs(recentCasts) do
-                if type(g) == "string" then keys[#keys + 1] = g end
-            end
-        end)
-
-        for _, g in ipairs(keys) do
-            local info = SafeGet(recentCasts, g)
-            if info then
-                local diff = now - info.time
-                if diff < 1.0 and diff < bestDiff then
-                    bestGUID, bestInfo, bestDiff = g, info, diff
-                end
-                if diff > 3.0 then SafeSet(recentCasts, g, nil) end
-            end
-        end
-
-        -- 清理过期去重
-        local okeys = {}
-        pcall(function()
-            for g in pairs(recentOutputs) do
-                if type(g) == "string" then okeys[#okeys + 1] = g end
-            end
-        end)
-        for _, g in ipairs(okeys) do
-            local t = SafeGet(recentOutputs, g)
-            if t and (now - t) > 2.0 then SafeSet(recentOutputs, g, nil) end
-        end
-
-        if not bestInfo then return end
-
-        SafeSet(recentCasts, bestGUID, nil)
-        RecordInterrupt(bestInfo.name)
-
-        -- 输出
-        local isMe = (bestGUID == addon.playerGUID)
-        local c = isMe and "|cff00ffff" or "|cff00ff00"
-        local msg = c .. bestInfo.name .. "|r 使用 |cffffff00" .. bestInfo.spellName .. "|r 打断成功！"
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00d1ff雨轩工具箱|r - |cffff6600[打断]|r " .. msg)
+    -- 清理过期去重
+    for k, t in pairs(recentOutputs) do
+        if (now - t) > 3.0 then recentOutputs[k] = nil end
     end
+
+    -- 获取打断技能名（优先用本地表，fallback 到 CLEU 提供的名称）
+    local spellName = INTERRUPT_SPELLS[extraSpellID]
+    if not spellName then
+        if extraSpellName and type(extraSpellName) == "string" and not issecretvalue(extraSpellName) then
+            spellName = extraSpellName
+        else
+            spellName = "打断"
+        end
+    end
+
+    -- 处理名字（去服务器后缀）
+    local shortName = Ambiguate(sourceName, "short")
+
+    -- 记录统计
+    RecordInterrupt(shortName)
+
+    -- 聊天框输出
+    local isMe = UnitGUID("player") == sourceGUID
+    local classColor = GetClassColor(shortName)
+    local c = "|cff" .. classColor
+    local msg = c .. shortName .. "|r 使用 |cffffff00" .. spellName .. "|r 打断成功！"
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00d1ff雨轩工具箱|r - |cffff6600[打断]|r " .. msg)
 end)
 
 ------------------------------------------------------------
