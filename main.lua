@@ -1,11 +1,11 @@
 ------------------------------------------------------------
--- 雨轩工具箱  V0.0.4
+-- 雨轩工具箱  V0.0.7
 -- 核心初始化和事件管理
 ------------------------------------------------------------
 ---@diagnostic disable: undefined-global
 local addonName, addon = ...
 
-addon.VERSION = "0.0.4"
+addon.VERSION = "0.0.7"
 addon.playerGUID = nil
 addon.playerName = nil
 
@@ -17,7 +17,8 @@ YuxuanUtilsDB = YuxuanUtilsDB or {}
 local function InitDefaults()
     if YuxuanUtilsDB.enableNavBox == nil then YuxuanUtilsDB.enableNavBox = true end
     if YuxuanUtilsDB.enableInterruptAlert == nil then YuxuanUtilsDB.enableInterruptAlert = false end
-    if YuxuanUtilsDB.interruptHistory == nil then YuxuanUtilsDB.interruptHistory = {} end
+    if YuxuanUtilsDB.autoShowStatsFrame == nil then YuxuanUtilsDB.autoShowStatsFrame = true end
+    if YuxuanUtilsDB.interruptHistoryByChar == nil then YuxuanUtilsDB.interruptHistoryByChar = {} end
 end
 
 ------------------------------------------------------------
@@ -61,6 +62,7 @@ initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 initFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         InitDefaults()
+        addon.InterruptHistory.Migrate()
         addon.Options.Create()
     elseif event == "PLAYER_ENTERING_WORLD" then
         addon.playerGUID = UnitGUID("player")
