@@ -16,9 +16,6 @@ YuxuanUtilsDB = YuxuanUtilsDB or {}
 
 local function InitDefaults()
     if YuxuanUtilsDB.enableNavBox == nil then YuxuanUtilsDB.enableNavBox = true end
-    if YuxuanUtilsDB.enableInterruptAlert == nil then YuxuanUtilsDB.enableInterruptAlert = false end
-    if YuxuanUtilsDB.autoShowStatsFrame == nil then YuxuanUtilsDB.autoShowStatsFrame = true end
-    if YuxuanUtilsDB.interruptHistoryByChar == nil then YuxuanUtilsDB.interruptHistoryByChar = {} end
 end
 
 ------------------------------------------------------------
@@ -26,30 +23,6 @@ end
 ------------------------------------------------------------
 function addon.Msg(text)
     DEFAULT_CHAT_FRAME:AddMessage("|cff00d1ff雨轩工具箱|r：" .. text)
-end
-
-------------------------------------------------------------
--- 斜杠命令  /yxt  /yxt dd
-------------------------------------------------------------
-SLASH_YUXUANUTILS1 = "/yxt"
-SlashCmdList["YUXUANUTILS"] = function(msg)
-    msg = strtrim(msg or "")
-    msg = strlower(msg)
-
-    if msg == "dd" then
-        YuxuanUtilsDB.enableInterruptAlert = not YuxuanUtilsDB.enableInterruptAlert
-        addon.Interrupt.UpdateState()
-        if YuxuanUtilsDB.enableInterruptAlert then
-            addon.Msg("|cff00ff00打断提示已开启|r")
-        else
-            addon.Msg("|cffff3333打断提示已关闭|r")
-        end
-        if YuxuanUtilsIntCheck then
-            YuxuanUtilsIntCheck:SetChecked(YuxuanUtilsDB.enableInterruptAlert)
-        end
-    else
-        addon.Toolbox.Toggle()
-    end
 end
 
 ------------------------------------------------------------
@@ -62,14 +35,12 @@ initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 initFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         InitDefaults()
-        addon.InterruptHistory.Migrate()
         addon.Options.Create()
     elseif event == "PLAYER_ENTERING_WORLD" then
         addon.playerGUID = UnitGUID("player")
         addon.playerName = UnitName("player")
         addon.Navigation.HookWorldMap()
         addon.Navigation.UpdateNavBox()
-        addon.Interrupt.UpdateState()
 
         DEFAULT_CHAT_FRAME:AddMessage(
             "|cff00d1ff雨轩工具箱|r：|cff00ff00已加载|r |cffffcc00V" .. addon.VERSION .. "|r"

@@ -13,8 +13,4 @@ modules\utils.lua
 
 # 功能模块
 modules\navigation.lua
-modules\interrupt\history.lua
-modules\interrupt\stats_frame.lua
-modules\interrupt\core.lua
-modules\toolbox.lua
 modules\options.lua
